@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0a0b24">
+<title>Olvers spel</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Andika:wght@400;700&family=Lilita+One&display=swap">
+<style>
+:root{--void:#0a0b24;--panel:#1f2462;--line:#3b4096;--ink:#f5f2ff;--muted:#aaa8dc;--gold:#ffc83d;color-scheme:dark;
+  --display:'Lilita One','Arial Rounded MT Bold',system-ui,sans-serif;--read:'Andika','Trebuchet MS',system-ui,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:var(--void);color:var(--ink);font-family:var(--read);
+  padding:max(24px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) 24px max(16px,env(safe-area-inset-left))}
+main{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+h1{font-family:var(--display);font-weight:400;font-size:2.4rem;margin:0}
+a.game{display:flex;align-items:center;gap:16px;padding:16px 18px;border-radius:22px;background:var(--panel);border:3px solid var(--gold);color:var(--ink);text-decoration:none}
+a.game .em{font-size:3rem;line-height:1}
+a.game b{font-family:var(--display);font-weight:400;font-size:1.6rem;display:block}
+a.game span{color:var(--muted)}
+p{color:var(--muted);line-height:1.5;margin:0}
+</style>
+</head>
+<body>
+<main>
+  <h1>Olvers spel</h1>
+  <a class="game" href="s-galaxy/"><span class="em">🐍</span><span><b>S Galaxy</b><span>Veckans ljud: s</span></span></a>
+  <p>Tips: öppna spelet i Safari och välj Dela → Lägg till på hemskärmen, så startar det som en app i helskärm.</p>
+</main>
+</body>
+</html>

@@ -1,0 +1,1257 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="S Galaxy">
+<meta name="theme-color" content="#0a0b24">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>Olver's S Galaxy</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Andika:wght@400;700&family=Lilita+One&display=swap">
+<style>
+/* Layout: one-screen arcade. Starfield canvas behind, HUD on top, one game stage that fills the rest.
+   Deliberately single dark "deep space" theme, so no light variant. */
+:root{
+  --void:#0a0b24;
+  --deep:#141743;
+  --panel:#1f2462;
+  --line:#3b4096;
+  --ink:#f5f2ff;
+  --muted:#aaa8dc;
+  --gold:#ffc83d;
+  --gold-deep:#c98600;
+  --on-gold:#2b1900;
+  --cyan:#38e6ff;
+  --cyan-deep:#0e8fa8;
+  --pink:#ff4fa3;
+  --pink-deep:#9c1458;
+  --green:#55f08a;
+  --red:#ff5d6c;
+  --red-deep:#8f1f2b;
+  --shade:rgba(5,6,22,.72);
+  --display:'Lilita One','Arial Rounded MT Bold','Trebuchet MS',system-ui,sans-serif;
+  --read:'Andika','Comic Sans MS','Trebuchet MS',system-ui,sans-serif;
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{height:100%}
+body{
+  background:var(--void);color:var(--ink);font-family:var(--read);font-size:16px;
+  overflow:hidden;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;
+  touch-action:manipulation;-webkit-tap-highlight-color:transparent;
+}
+#stars{position:fixed;inset:0;width:100%;height:100%;z-index:0}
+#fx{position:fixed;inset:0;pointer-events:none;z-index:50;overflow:hidden}
+#app{
+  position:relative;z-index:1;height:100%;display:flex;flex-direction:column;
+  max-width:880px;margin:0 auto;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));
+  padding-right:max(16px, env(safe-area-inset-right, 0px));
+  padding-block:8px;
+}
+#screen{flex:1;min-height:0;position:relative;display:flex;flex-direction:column}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible{outline:3px solid var(--cyan);outline-offset:3px}
+
+/* ---------- HUD ---------- */
+.hud{display:flex;align-items:center;gap:10px;padding-bottom:8px}
+.pilot{display:flex;align-items:center;gap:8px;min-width:0}
+.badge{width:42px;height:42px;border-radius:12px;background:var(--panel);display:grid;place-items:center;font-size:1.4rem;border:2px solid var(--gold);flex:none}
+.pilot-name{font-family:var(--display);font-size:1.1rem;line-height:1;white-space:nowrap}
+.pilot-rank{font-size:.78rem;color:var(--gold);letter-spacing:.04em;white-space:nowrap}
+.xp{flex:1;min-width:70px;display:flex;flex-direction:column;gap:3px}
+.xpbar{height:14px;background:var(--deep);border-radius:8px;border:2px solid var(--line);overflow:hidden}
+.xpbar i{display:block;height:100%;width:0;background:repeating-linear-gradient(-45deg,var(--gold) 0 10px,#ffd970 10px 20px);transition:width .6s ease}
+.xptext{font-size:.72rem;color:var(--muted);font-variant-numeric:tabular-nums;text-align:right}
+.starcount{font-family:var(--display);font-size:1.15rem;color:var(--gold);white-space:nowrap}
+.iconbtn{width:42px;height:42px;flex:none;border-radius:12px;border:2px solid var(--line);background:var(--deep);font-size:1.15rem;display:grid;place-items:center}
+.grownups{height:42px;padding:0 10px;border-radius:12px;border:2px solid var(--line);background:var(--deep);font-size:.8rem;color:var(--muted);flex:none}
+@media (max-width:520px){ .xptext{display:none} .grownups{font-size:0;width:42px;padding:0} .grownups::before{content:"⚙";font-size:1.15rem} }
+
+/* ---------- buttons ---------- */
+.btn{
+  font-family:var(--display);font-size:1.2rem;letter-spacing:.02em;padding:.6em 1.1em;border-radius:18px;border:none;
+  background:var(--gold);color:var(--on-gold);box-shadow:0 6px 0 var(--gold-deep);transition:transform .08s,box-shadow .08s;
+}
+.btn:active{transform:translateY(4px);box-shadow:0 2px 0 var(--gold-deep)}
+.btn.cyan{background:var(--cyan);color:var(--void);box-shadow:0 6px 0 var(--cyan-deep)}
+.btn.cyan:active{box-shadow:0 2px 0 var(--cyan-deep)}
+.btn.ghost{background:var(--deep);color:var(--ink);border:2px solid var(--line);box-shadow:0 5px 0 var(--line)}
+.btn.xl{font-size:clamp(1.4rem,6vw,1.9rem);padding:.6em 1.5em;border-radius:22px}
+.btn.small{font-size:1rem;padding:.5em .9em}
+.row{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
+.pulse{animation:pulse 1.4s ease-in-out infinite}
+
+/* ---------- title ---------- */
+.title{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;text-align:center}
+.logo{display:flex;flex-direction:column;align-items:center;line-height:.9}
+.logo .who{font-family:var(--display);font-size:clamp(1.6rem,7vw,2.4rem);color:var(--cyan)}
+.logo .big{font-family:var(--display);font-size:clamp(3.2rem,16vw,6rem);text-shadow:0 6px 0 var(--pink-deep)}
+.logo .big .s{font-size:1.35em;color:var(--gold);text-shadow:0 6px 0 var(--gold-deep),0 0 40px rgba(255,200,61,.6)}
+.mascot{font-size:clamp(4rem,20vw,6.5rem);animation:bob 2.4s ease-in-out infinite}
+.tag{font-size:1.1rem;color:var(--muted);max-width:30ch;text-wrap:balance}
+
+/* ---------- coach (Sizzle) ---------- */
+.coach{display:flex;align-items:flex-end;gap:8px;min-height:58px}
+.sizzle{font-size:2.5rem;line-height:1;transform-origin:bottom center;flex:none}
+.sizzle.talk{animation:talk .22s ease-in-out infinite alternate}
+.bubble{background:var(--ink);color:var(--void);border-radius:18px 18px 18px 4px;padding:8px 14px;font-size:1.12rem;font-weight:700;line-height:1.25;min-width:0;max-width:100%}
+.bubble:empty{visibility:hidden}
+.bubble.pop{animation:pop .25s ease-out}
+
+/* ---------- map ---------- */
+.map{flex:1;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;gap:10px;padding-bottom:12px;-webkit-overflow-scrolling:touch}
+.map > *{flex-shrink:0}
+.maphead{display:flex;flex-direction:column;gap:6px}
+.maphead h1{margin:0;font-family:var(--display);font-weight:400;font-size:clamp(1.8rem,8vw,2.6rem);line-height:1}
+.maphead h1 .s,.thisweek .s{color:var(--gold)}
+.thisweek{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:1rem;color:var(--muted)}
+.thisweek b{font-family:var(--read);font-size:1.6rem;color:var(--gold);line-height:1}
+.week{display:flex;gap:5px;align-items:center}
+.week span{display:flex;flex-direction:column;align-items:center;font-size:.62rem;color:var(--muted);gap:2px}
+.week i{width:18px;height:18px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center;font-style:normal;font-size:.7rem}
+.week i.on{background:var(--gold);border-color:var(--gold);color:var(--on-gold)}
+.path{position:relative;list-style:none;margin:0 auto;padding:0;width:100%;max-width:540px;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,148px)}
+.path svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.path svg polyline{fill:none;stroke:var(--line);stroke-width:4;stroke-dasharray:2 12;stroke-linecap:round}
+.node{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;position:relative;z-index:1;text-align:center}
+.planet{
+  --size:82px;width:var(--size);height:var(--size);border-radius:50%;border:none;font-size:2.1rem;display:grid;place-items:center;
+  background:radial-gradient(circle at 30% 28%,rgba(255,255,255,.55) 0 7%,transparent 8%),radial-gradient(circle at 38% 36%,var(--pc),color-mix(in srgb,var(--pc) 40%,var(--void)) 78%);
+  box-shadow:0 0 0 3px rgba(255,255,255,.12),0 0 26px color-mix(in srgb,var(--pc) 55%,transparent);
+  transition:transform .12s;
+}
+.planet:active{transform:scale(.92)}
+.planet.boss{--size:100px;font-size:2.6rem}
+.planet.locked{filter:grayscale(1) brightness(.45);font-size:1.6rem}
+.planet.next{animation:ring 1.3s ease-out infinite}
+.pname{font-family:var(--display);font-size:.98rem;line-height:1.05;max-width:11ch}
+.pstars{font-size:.95rem;letter-spacing:2px;color:var(--line)}
+.pstars b{color:var(--gold);font-weight:400}
+.mapfoot{display:flex;justify-content:center;gap:12px;flex-wrap:wrap}
+
+/* ---------- game frame ---------- */
+.game{flex:1;display:flex;flex-direction:column;gap:8px;min-height:0}
+.gbar{display:flex;align-items:center;gap:10px}
+.gtitle{font-family:var(--display);font-size:1.25rem;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--pc)}
+.pips{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}
+.pips i{width:11px;height:11px;border-radius:50%;background:var(--line)}
+.pips i.on{background:var(--gold);box-shadow:0 0 8px var(--gold)}
+.stage{flex:1;min-height:0;position:relative;display:flex;flex-direction:column;align-items:center;gap:12px}
+.ship{font-size:3rem;line-height:1;transform:rotate(-45deg);display:inline-block}
+.shipwrap{display:flex;justify-content:center}
+.beam{position:absolute;height:6px;border-radius:3px;background:var(--cyan);box-shadow:0 0 12px var(--cyan),0 0 24px var(--cyan);transform-origin:0 50%;animation:beam .35s ease-out forwards;pointer-events:none;z-index:5}
+
+/* hiss rocket */
+.launch{position:relative;width:100%;max-width:420px;flex:1;min-height:110px}
+.pad{position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:150px;height:12px;background:var(--line);border-radius:4px}
+.rocket{position:absolute;left:50%;bottom:16px;font-size:clamp(3.2rem,14vw,4.5rem);line-height:1;transform:translateX(-50%) rotate(-45deg)}
+.rocket.shake{animation:rshake .09s linear infinite}
+.rocket.go{transition:bottom 1.1s cubic-bezier(.5,0,.9,.4);bottom:140%}
+.flame{position:absolute;left:50%;bottom:6px;width:34px;height:0;transform:translateX(-50%);border-radius:50% 50% 45% 45%;background:radial-gradient(ellipse at 50% 20%,var(--gold),var(--pink) 60%,transparent 72%);filter:blur(2px)}
+.fuel{width:min(420px,100%);height:28px;border-radius:14px;background:var(--deep);border:3px solid var(--line);overflow:hidden;position:relative;flex:none}
+.fuel i{display:block;height:100%;width:0;background:repeating-linear-gradient(-45deg,var(--gold) 0 14px,#ffd970 14px 28px)}
+.fuel.full{border-color:var(--green);box-shadow:0 0 16px var(--green)}
+.fuel.bonus i{background:repeating-linear-gradient(-45deg,var(--green) 0 14px,#b6ffcd 14px 28px)}
+.fuel::after{content:"";position:absolute;right:0;top:0;bottom:0;width:4px;background:var(--ink);opacity:.5}
+.timer{font-family:var(--display);font-size:1.6rem;font-variant-numeric:tabular-nums;flex:none}
+.timer small{font-size:.8rem;color:var(--muted)}
+.holdbtn{
+  width:clamp(140px,40vw,180px);aspect-ratio:1;border-radius:50%;border:none;flex:none;touch-action:none;
+  background:radial-gradient(circle at 38% 32%,#ff9ccd,var(--pink) 58%,var(--pink-deep));
+  box-shadow:0 10px 0 var(--pink-deep),0 0 30px rgba(255,79,163,.4);
+  font-family:var(--display);color:var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  transition:transform .08s,box-shadow .08s;
+}
+.holdbtn .big{font-family:var(--read);font-weight:700;font-size:clamp(2.4rem,11vw,3.2rem);line-height:1}
+.holdbtn .small{font-size:1rem;letter-spacing:.04em}
+.holdbtn.down{transform:translateY(8px);box-shadow:0 2px 0 var(--pink-deep),0 0 70px var(--pink)}
+
+/* sound hunt */
+.rocks{display:flex;gap:12px;justify-content:center;width:100%;flex:1;align-items:center}
+.rock{display:flex;flex-direction:column;align-items:center;gap:8px;animation:bob 3s ease-in-out infinite;animation-delay:var(--d)}
+.rockbtn{
+  width:min(27vw,132px);aspect-ratio:1;border:3px solid var(--line);font-size:clamp(2.5rem,11vw,4rem);display:grid;place-items:center;
+  border-radius:46% 54% 50% 50% / 52% 44% 56% 48%;
+  background:radial-gradient(circle at 35% 30%,#5d62a8,#272b68 72%);box-shadow:inset -8px -10px 0 rgba(0,0,0,.25);
+}
+.rock.lit .rockbtn{border-color:var(--gold);box-shadow:0 0 26px var(--gold),inset -8px -10px 0 rgba(0,0,0,.25)}
+.ear{width:44px;height:44px;border-radius:50%;border:2px solid var(--line);background:var(--deep);font-size:1.1rem}
+.rock.boom{animation:explode .5s forwards}
+.rock.no .rockbtn{animation:shake .4s}
+.combo{position:absolute;top:0;right:0;font-family:var(--display);color:var(--gold);font-size:1.4rem}
+
+/* say it */
+.card{background:var(--panel);border:3px solid var(--pc);border-radius:28px;padding:12px 28px 16px;display:flex;flex-direction:column;align-items:center;box-shadow:0 0 40px color-mix(in srgb,var(--pc) 35%,transparent);max-width:100%;min-width:min(250px,100%)}
+.pic{font-size:clamp(4.2rem,21vw,7rem);line-height:1.15}
+.word{font-weight:700;font-size:clamp(2.2rem,10vw,3.4rem);letter-spacing:.05em;line-height:1.1;text-align:center}
+.s{color:var(--gold);text-shadow:0 0 14px rgba(255,200,61,.6)}
+.card.in{animation:warpin .5s cubic-bezier(.2,1.4,.4,1)}
+.card.out{animation:blast .45s forwards}
+.charges{display:flex;gap:14px}
+.charges i{width:30px;height:30px;border-radius:50%;border:3px solid var(--gold)}
+.charges i.on{background:var(--gold);box-shadow:0 0 16px var(--gold);animation:pop .3s}
+.hint{font-size:.95rem;color:var(--muted);text-align:center}
+
+/* letter lasers */
+.lhud{display:flex;align-items:center;gap:12px;font-family:var(--display);font-size:1.15rem;width:100%}
+.tbar{flex:1;height:12px;border-radius:6px;background:var(--deep);border:2px solid var(--line);overflow:hidden}
+.tbar i{display:block;height:100%;width:100%;background:var(--cyan)}
+.field{flex:1;width:100%;position:relative;overflow:hidden;border:2px solid var(--line);border-radius:22px;background:rgba(10,11,36,.55);min-height:0}
+.field .shipwrap{position:absolute;bottom:4px;left:0;right:0}
+.letter{
+  position:absolute;top:-70px;width:66px;height:66px;margin-left:-33px;border-radius:50%;border:3px solid var(--line);
+  background:var(--panel);font-family:var(--read);font-weight:700;font-size:2.5rem;line-height:1;display:grid;place-items:center;padding:0 0 6px;touch-action:none;
+}
+.letter.bad{border-color:var(--red);color:var(--red)}
+.letter.zap{animation:explode .4s forwards;border-color:var(--gold);color:var(--gold)}
+.letter.gone{opacity:0;transition:opacity .3s}
+
+/* reading */
+.readw{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.lt{font-weight:700;font-size:clamp(3rem,16vw,5rem);line-height:1.15;background:var(--panel);border-radius:18px;padding:0 .22em .08em;border:3px solid var(--line);min-width:1.1em;text-align:center}
+.lt.s{border-color:var(--gold);cursor:pointer}
+.choices{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
+.choice{width:min(27vw,130px);aspect-ratio:1;font-size:clamp(2.8rem,12vw,4.4rem);border-radius:24px;border:3px solid var(--line);background:var(--panel);display:grid;place-items:center}
+.choice.yes{border-color:var(--green);box-shadow:0 0 24px var(--green)}
+.choice.no{animation:shake .4s;border-color:var(--red)}
+
+/* boss */
+.bossbar{width:min(420px,100%);display:flex;flex-direction:column;gap:4px;font-family:var(--display);font-size:.95rem;color:var(--red)}
+.bossbar div{height:18px;border-radius:9px;border:3px solid var(--red);background:var(--deep);overflow:hidden}
+.bossbar i{display:block;height:100%;width:100%;background:var(--red);transition:width .4s}
+.king{position:relative;font-size:clamp(4.6rem,24vw,7.5rem);line-height:1;animation:bossbob 2s ease-in-out infinite;filter:drop-shadow(0 0 22px rgba(255,93,108,.55))}
+.king .crown{position:absolute;top:-.42em;left:50%;transform:translateX(-50%) rotate(-12deg);font-size:.5em}
+.king.hit{animation:hit .45s}
+.king.dead{animation:explode 1s forwards}
+.sentence{display:flex;flex-wrap:wrap;gap:6px 12px;justify-content:center;max-width:640px}
+.sentence button{font-family:var(--read);font-weight:700;font-size:clamp(1.6rem,7.5vw,2.5rem);background:none;border:none;border-bottom:3px dashed var(--line);padding:0 .08em;line-height:1.2}
+.sentence button.on{color:var(--cyan);border-bottom-color:var(--cyan)}
+
+/* results */
+.results{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;overflow-y:auto}
+.rtitle{font-family:var(--display);font-size:clamp(2rem,9vw,3.2rem);color:var(--gold);line-height:1;text-shadow:0 5px 0 var(--gold-deep)}
+.rstars{display:flex;gap:10px;font-size:clamp(3rem,15vw,4.6rem);line-height:1}
+.rstars span{color:var(--line);transform:scale(.7);display:inline-block}
+.rstars span.got{color:var(--gold);animation:starin .5s forwards;text-shadow:0 0 20px var(--gold)}
+.rline{font-family:var(--display);font-size:1.3rem}
+.rline.cyan{color:var(--cyan)}
+.sticker{display:flex;flex-direction:column;align-items:center;gap:4px;opacity:0}
+.sticker.show{opacity:1}
+.sticker .em{font-size:4rem;line-height:1;animation:spinin .8s ease-out}
+.sticker small{color:var(--muted);font-size:.9rem}
+.rankup{font-family:var(--display);font-size:1.5rem;background:var(--pink);color:var(--ink);padding:.35em .9em;border-radius:14px;animation:pop .4s}
+
+/* modal */
+.modal{position:fixed;inset:0;z-index:40;background:var(--shade);display:grid;place-items:center;padding:16px max(16px, env(safe-area-inset-right, 0px)) 16px max(16px, env(safe-area-inset-left, 0px))}
+.sheet{background:var(--deep);border:2px solid var(--line);border-radius:24px;padding:20px;max-width:560px;width:100%;max-height:100%;overflow-y:auto;display:flex;flex-direction:column;gap:14px;user-select:text;-webkit-user-select:text}
+.sheet h2{margin:0;font-family:var(--display);font-weight:400;font-size:1.6rem}
+.sheet h3{margin:6px 0 0;font-family:var(--display);font-weight:400;font-size:1.15rem;color:var(--gold)}
+.sheet p,.sheet li{line-height:1.5;margin:0;color:var(--ink);max-width:65ch}
+.sheet ol,.sheet ul{margin:0;padding-left:1.3em;display:flex;flex-direction:column;gap:4px}
+.sheet .muted{color:var(--muted);font-size:.92rem}
+.field-row{display:flex;flex-direction:column;gap:6px}
+.field-row label{font-weight:700}
+.field-row input[type=text]{font:inherit;font-size:1.1rem;padding:.5em .7em;border-radius:12px;border:2px solid var(--line);background:var(--panel);color:var(--ink)}
+.check{display:flex;align-items:center;gap:10px;font-weight:700}
+.check input{width:22px;height:22px;accent-color:var(--gold)}
+input[type=range]{width:100%;accent-color:var(--gold)}
+.stickers{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:10px}
+.stickers span{aspect-ratio:1;border-radius:16px;background:var(--panel);display:grid;place-items:center;font-size:2.2rem;border:2px solid var(--line)}
+.stickers span.no{font-size:1.4rem;color:var(--line);font-family:var(--display)}
+
+/* microphone */
+.smeter{width:min(420px,100%);display:flex;flex-direction:column;gap:4px;font-family:var(--display);font-size:.95rem;color:var(--muted);flex:none}
+.smeter div{height:30px;border-radius:15px;border:3px solid var(--line);background:var(--deep);overflow:hidden}
+.smeter i{display:block;height:100%;width:0;background:var(--line);transition:width .06s linear}
+.smeter.on i{background:var(--gold);box-shadow:0 0 18px var(--gold)}
+.smeter.on span{color:var(--gold)}
+.holdbtn.listening{cursor:default}
+.holdbtn.listening .big{font-size:clamp(2.2rem,10vw,3rem)}
+.btn.rec{background:var(--red);color:var(--ink);box-shadow:0 6px 0 var(--red-deep);animation:pulse 1s ease-in-out infinite}
+.word .s{display:inline-block}
+.word .s.flash{animation:sflash .8s ease-out}
+.micdot{font-size:1.1rem}
+select{font:inherit;font-size:1.05rem;padding:.45em .6em;border-radius:12px;border:2px solid var(--line);background:var(--panel);color:var(--ink)}
+@keyframes sflash{50%{transform:scale(1.45);text-shadow:0 0 30px var(--gold)}}
+
+/* particles */
+.spark{position:absolute;transform:translate(-50%,-50%);animation:spark .9s ease-out forwards;font-family:var(--display)}
+.c1{color:var(--gold)} .c2{color:var(--cyan)} .c3{color:var(--pink)} .c4{color:var(--green)}
+.xpfloat{position:absolute;transform:translate(-50%,-50%);font-family:var(--display);font-size:1.4rem;color:var(--gold);animation:floatup 1s ease-out forwards;text-shadow:0 2px 0 var(--gold-deep)}
+.confetti{position:absolute;top:-30px;width:10px;height:16px;animation:fall 2.4s linear forwards}
+
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+@keyframes bossbob{0%,100%{transform:translateY(0) rotate(-3deg)}50%{transform:translateY(-8px) rotate(3deg)}}
+@keyframes talk{from{transform:scaleY(1)}to{transform:scaleY(1.1) rotate(-4deg)}}
+@keyframes pop{0%{transform:scale(.6)}70%{transform:scale(1.12)}100%{transform:scale(1)}}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
+@keyframes ring{0%{box-shadow:0 0 0 0 rgba(255,200,61,.8),0 0 26px color-mix(in srgb,var(--pc) 55%,transparent)}100%{box-shadow:0 0 0 22px rgba(255,200,61,0),0 0 26px color-mix(in srgb,var(--pc) 55%,transparent)}}
+@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-10px)}40%{transform:translateX(10px)}60%{transform:translateX(-7px)}80%{transform:translateX(7px)}}
+@keyframes rshake{0%{transform:translateX(-52%) rotate(-45deg)}50%{transform:translateX(-48%) rotate(-45deg)}100%{transform:translateX(-50%) rotate(-45deg)}}
+@keyframes explode{0%{transform:scale(1);opacity:1}40%{transform:scale(1.35);opacity:1}100%{transform:scale(0);opacity:0}}
+@keyframes warpin{0%{transform:scale(.1) rotate(-12deg);opacity:0}100%{transform:scale(1) rotate(0);opacity:1}}
+@keyframes blast{0%{transform:scale(1);opacity:1}100%{transform:scale(1.6);opacity:0}}
+@keyframes beam{0%{opacity:1}100%{opacity:0}}
+@keyframes hit{0%,100%{transform:translateX(0)}20%{transform:translateX(-14px) rotate(-8deg)}50%{transform:translateX(14px) rotate(8deg)}80%{transform:translateX(-6px)}}
+@keyframes starin{0%{transform:scale(.2) rotate(-90deg)}70%{transform:scale(1.3) rotate(10deg)}100%{transform:scale(1) rotate(0)}}
+@keyframes spinin{0%{transform:scale(0) rotate(-360deg)}100%{transform:scale(1) rotate(0)}}
+@keyframes spark{0%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) scale(.4)}}
+@keyframes floatup{0%{opacity:0;transform:translate(-50%,-30%)}20%{opacity:1}100%{opacity:0;transform:translate(-50%,-180%)}}
+@keyframes fall{0%{transform:translateY(0) rotate(0)}100%{transform:translateY(110vh) rotate(720deg)}}
+
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+}
+@media (max-height:640px){
+  .coach{min-height:48px}.sizzle{font-size:2rem}.bubble{font-size:1rem;padding:6px 12px}
+  .holdbtn{width:130px}.pic{font-size:4rem}.card{padding:8px 20px 10px}
+}
+</style>
+
+</head>
+<body>
+<canvas id="stars" aria-hidden="true"></canvas>
+<div id="app">
+  <header class="hud" id="hud" hidden>
+    <div class="pilot">
+      <div class="badge" aria-hidden="true">🧑‍🚀</div>
+      <div><div class="pilot-name" id="hudName">Olver</div><div class="pilot-rank" id="hudRank">Space Cadet</div></div>
+    </div>
+    <div class="xp" aria-label="Experience points"><div class="xpbar"><i id="xpfill"></i></div><div class="xptext" id="xptext">0 XP</div></div>
+    <div class="starcount" aria-label="Stars collected">★ <span id="hudStars">0</span></div>
+    <button class="iconbtn" id="sndBtn" aria-label="Sound effects on or off">🔊</button>
+    <button class="grownups" id="parentBtn" aria-label="Settings for grown-ups">Grown-ups</button>
+  </header>
+  <main id="screen"></main>
+</div>
+<div id="fx" aria-hidden="true"></div>
+<div id="modalRoot"></div>
+
+<script>
+(() => {
+'use strict';
+
+/* =========================================================
+   CONTENT: this week's sound is S.
+   ========================================================= */
+const WORDS = {
+  start: [
+    {w:'sun',e:'☀️'},{w:'sock',e:'🧦'},{w:'seal',e:'🦭'},{w:'soap',e:'🧼'},{w:'sandwich',e:'🥪'},
+    {w:'sofa',e:'🛋️'},{w:'saw',e:'🪚'},{w:'sea',e:'🌊'},{w:'salad',e:'🥗'},{w:'six',e:'6️⃣'},
+    {w:'seven',e:'7️⃣'},{w:'sunflower',e:'🌻'},{w:'saxophone',e:'🎷'},{w:'sad',e:'😢'}
+  ],
+  end: [
+    {w:'bus',e:'🚌'},{w:'house',e:'🏠'},{w:'mouse',e:'🐭'},{w:'horse',e:'🐴'},{w:'dress',e:'👗'},
+    {w:'octopus',e:'🐙'},{w:'cactus',e:'🌵'},{w:'yes',e:'✅'},{w:'tennis',e:'🎾'},{w:'hippopotamus',e:'🦛'}
+  ],
+  middle: [
+    {w:'hamster',e:'🐹'},{w:'lobster',e:'🦞'},{w:'basket',e:'🧺'},{w:'castle',e:'🏰'},{w:'dinosaur',e:'🦕'},
+    {w:'pasta',e:'🍝'},{w:'biscuit',e:'🍪'},{w:'postbox',e:'📮'},{w:'lipstick',e:'💄'}
+  ],
+  blends: [
+    {w:'star',e:'⭐'},{w:'snake',e:'🐍'},{w:'spoon',e:'🥄'},{w:'spider',e:'🕷️'},{w:'snail',e:'🐌'},
+    {w:'smile',e:'😊'},{w:'snowman',e:'⛄'},{w:'skateboard',e:'🛹'},{w:'sleep',e:'😴'},{w:'swim',e:'🏊'},
+    {w:'sweets',e:'🍬'},{w:'stop',e:'🛑'},{w:'strawberry',e:'🍓'},{w:'scarf',e:'🧣'},{w:'skunk',e:'🦨'}
+  ]
+};
+// Words with no s sound anywhere, for the listening game.
+const OTHER = [
+  {w:'cat',e:'🐱'},{w:'dog',e:'🐶'},{w:'hat',e:'🎩'},{w:'ball',e:'⚽'},{w:'car',e:'🚗'},{w:'apple',e:'🍎'},
+  {w:'banana',e:'🍌'},{w:'tree',e:'🌳'},{w:'moon',e:'🌙'},{w:'duck',e:'🦆'},{w:'pig',e:'🐷'},{w:'bed',e:'🛏️'},
+  {w:'egg',e:'🥚'},{w:'cake',e:'🎂'},{w:'book',e:'📖'},{w:'frog',e:'🐸'},{w:'lion',e:'🦁'},{w:'kite',e:'🪁'},
+  {w:'rainbow',e:'🌈'},{w:'robot',e:'🤖'},{w:'train',e:'🚂'},{w:'bee',e:'🐝'},{w:'cow',e:'🐮'},{w:'monkey',e:'🐵'},
+  {w:'carrot',e:'🥕'},{w:'lemon',e:'🍋'},{w:'drum',e:'🥁'},{w:'owl',e:'🦉'},{w:'pear',e:'🍐'},{w:'key',e:'🔑'}
+];
+// Short words to read. The pictures in each round are other S words, so he has to read past the first letter.
+const READ = [
+  {w:'sun',e:'☀️'},{w:'sock',e:'🧦'},{w:'six',e:'6️⃣'},{w:'sad',e:'😢'},{w:'bus',e:'🚌'},
+  {w:'yes',e:'✅'},{w:'saw',e:'🪚'},{w:'sea',e:'🌊'},{w:'star',e:'⭐'},{w:'seal',e:'🦭'}
+];
+const SENTENCES = [
+  'I see the sun.',
+  'Six socks on a bus.',
+  'Sizzle is a silly snake.',
+  'A mouse sits on the sofa.',
+  'Stars sparkle in space.'
+];
+const DECOY = ['a','c','z','e','o','n','x','r','t','p','m','Z','C','O','5','2','8'];
+const STICKERS = ['👽','🛸','🪐','☄️','🌟','🌙','🤖','👾','🛰️','🌍','🦖','🐉','🦄','🐙','🏆','💎','🔭','🌋','🐲','🦈'];
+const RANKS = [[0,'Space Cadet'],[80,'Rocket Pilot'],[200,'Star Ranger'],[400,'Comet Captain'],[700,'Galaxy Hero'],[1100,'S Master'],[1600,'Legend of the Stars']];
+const PRAISE = ['Brilliant!','Super!','Amazing!','Fantastic!','Sizzling!','Spot on!','Awesome!','Well done!','Wow!','Excellent!'];
+const AGAIN = ['Again!','One more time!','And again!','Great, again!'];
+
+const PLANETS = [
+  {id:'hiss',   name:'Hiss Rocket',   icon:'🚀', color:'#ff4fa3', play:playHiss},
+  {id:'hunt',   name:'Sound Hunt',    icon:'👂', color:'#38e6ff', play:playHunt},
+  {id:'start',  name:'Sun Planet',    icon:'☀️', color:'#ffb627', play:playSay, list:'start'},
+  {id:'end',    name:'Bus Moon',      icon:'🚌', color:'#8c7cff', play:playSay, list:'end'},
+  {id:'middle', name:'Dino World',    icon:'🦕', color:'#55f08a', play:playSay, list:'middle'},
+  {id:'blends', name:'Star Cluster',  icon:'⭐', color:'#ffd84d', play:playSay, list:'blends'},
+  {id:'letters',name:'Letter Lasers', icon:'🔤', color:'#ff7a45', play:playLetters},
+  {id:'read',   name:'Reading Rings', icon:'📖', color:'#4fd1c5', play:playRead},
+  {id:'boss',   name:'Snake King',    icon:'👑', color:'#ff3d6e', play:playBoss, boss:true}
+];
+// Map layout: winding path across a 3 x 3 grid.
+const GRID = [[1,1],[1,2],[1,3],[2,3],[2,2],[2,1],[3,1],[3,2],[3,3]];
+
+/* =========================================================
+   SAVE (this device only)
+   ========================================================= */
+const KEY = 's-galaxy-v1';
+const DEFAULT = {name:'Olver',xp:0,stars:{},unlocked:1,stickers:[],allOpen:false,sound:true,voice:true,rate:1,days:[],plays:0,mic:true,sens:1};
+let save = Object.assign({}, DEFAULT);
+try { const raw = localStorage.getItem(KEY); if (raw) save = Object.assign({}, DEFAULT, JSON.parse(raw)); } catch (e) {}
+function persist(){ try { localStorage.setItem(KEY, JSON.stringify(save)); } catch (e) {} }
+function dayKey(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function markDay(){ const k = dayKey(new Date()); if (!save.days.includes(k)) { save.days.push(k); save.days = save.days.slice(-60); } }
+
+/* =========================================================
+   HELPERS
+   ========================================================= */
+const $ = (s, el=document) => el.querySelector(s);
+const screen = $('#screen'), fx = $('#fx');
+const rand = a => a[Math.floor(Math.random()*a.length)];
+const shuffle = a => { a = a.slice(); for (let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; };
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const cap = s => s.charAt(0).toUpperCase()+s.slice(1);
+const hl = w => w.split('').map(ch => /s/i.test(ch) ? `<span class="s">${ch}</span>` : (ch===' ' ? '&nbsp;' : esc(ch))).join('');
+const praise = () => Math.random() < .3 ? `${rand(PRAISE)} Well done, ${save.name}!` : rand(PRAISE);
+const isOpen = i => save.allOpen || i < save.unlocked;
+const totalStars = () => Object.values(save.stars).reduce((a,b)=>a+b,0);
+const rankOf = xp => { let r=0; RANKS.forEach((x,i)=>{ if (xp>=x[0]) r=i; }); return r; };
+
+// Every game run gets an id; leaving a game bumps it so pending async steps stop.
+let RUN = 0, cleanups = [], session = {xp:0, rank0:0};
+function stopGame(){ RUN++; cleanups.forEach(f => { try { f(); } catch (e) {} }); cleanups = []; try { speechSynthesis.cancel(); } catch (e) {} }
+
+/* =========================================================
+   AUDIO: synth effects + the snake sound itself
+   ========================================================= */
+let ac = null, noiseBuf = null, outUntil = 0, talking = false;
+function markOut(sec){ outUntil = Math.max(outUntil, performance.now() + sec*1000 + 200); }
+function audio(){
+  if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
+  if (ac && ac.state === 'suspended') ac.resume();
+  return ac;
+}
+function tone(freq, dur, {type='square', vol=.06, slide=0, delay=0}={}){
+  if (!save.sound) return; const a = audio(); if (!a) return;
+  const t = a.currentTime + delay, o = a.createOscillator(), g = a.createGain();
+  o.type = type; o.frequency.setValueAtTime(freq, t);
+  if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, freq+slide), t+dur);
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.0001, t+dur);
+  o.connect(g).connect(a.destination); o.start(t); o.stop(t+dur+.02);
+}
+function noise(dur, {vol=.3, filters=[], delay=0, attack=.04, hold=false, force=false}={}){
+  if (!save.sound && !force) return; const a = audio(); if (!a) return;
+  if (!noiseBuf) { noiseBuf = a.createBuffer(1, a.sampleRate*2, a.sampleRate); const d = noiseBuf.getChannelData(0); for (let i=0;i<d.length;i++) d[i] = Math.random()*2-1; }
+  const t = a.currentTime + delay, src = a.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
+  let node = src;
+  filters.forEach(([type, f, q]) => { const b = a.createBiquadFilter(); b.type = type; b.frequency.value = f; if (q) b.Q.value = q; node.connect(b); node = b; });
+  const g = a.createGain(); g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(vol, t+attack);
+  if (hold) { g.gain.setValueAtTime(vol, t+Math.max(attack, dur-.12)); }
+  g.gain.exponentialRampToValueAtTime(.0001, t+dur);
+  node.connect(g).connect(a.destination); src.start(t); src.stop(t+dur+.05);
+}
+const sfx = {
+  // A clean "sss": white noise kept in the 4 to 9 kHz band where the real sound lives.
+  hiss: (d=1.5) => (markOut(d), noise(d, {vol:.35, filters:[['highpass',4000],['bandpass',6500,.9]], attack:.08, hold:true, force:true})),
+  laser: () => tone(1300, .18, {type:'sawtooth', slide:-1000, vol:.05}),
+  boom: () => noise(.55, {vol:.45, filters:[['lowpass',900]], attack:.01}),
+  coin: () => { tone(988,.08,{vol:.05}); tone(1319,.25,{vol:.05,delay:.08}); },
+  bonk: () => tone(180,.25,{type:'triangle',slide:-90,vol:.18}),
+  blip: () => tone(660,.07,{vol:.04}),
+  up: () => [523,659,784,1047].forEach((f,i) => tone(f,.16,{vol:.05,delay:i*.09})),
+  fanfare: () => [523,659,784,1047,784,1047].forEach((f,i) => tone(f, i===5?.6:.15, {vol:.06,delay:i*.13}))
+};
+
+/* ---------- voice (British English) ---------- */
+let voice = null;
+function pickVoice(){
+  if (!('speechSynthesis' in window)) return;
+  const vs = speechSynthesis.getVoices(); if (!vs.length) return;
+  const gb = vs.filter(v => /en[-_]GB/i.test(v.lang));
+  voice = gb.find(v => /Serena|Kate|Martha|Libby|Sonia|Stephanie|Female|Google UK English Female/i.test(v.name))
+       || gb.find(v => /Daniel|Arthur|Google UK/i.test(v.name)) || gb[0]
+       || vs.find(v => /^en[-_](AU|IE|NZ)/i.test(v.lang)) || vs.find(v => /^en/i.test(v.lang)) || null;
+}
+if ('speechSynthesis' in window) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
+function speak(text, {rate=.9, pitch=1.08}={}){
+  return new Promise(res => {
+    if (!save.voice || !('speechSynthesis' in window)) return setTimeout(res, 300 + text.length*40);
+    let done = false; const fin = () => { if (!done) { done = true; talking = false; markOut(.1); res(); } };
+    const go = () => {
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'en-GB'; if (voice) u.voice = voice;
+      u.rate = rate * (save.rate || 1); u.pitch = pitch;
+      u.onend = fin; u.onerror = fin; talking = true;
+      setTimeout(fin, 1500 + text.length * 95 / u.rate);
+      try { speechSynthesis.speak(u); } catch (e) { fin(); }
+    };
+    if (speechSynthesis.speaking || speechSynthesis.pending) { speechSynthesis.cancel(); setTimeout(go, 70); } else go();
+  });
+}
+async function say(text, opts){
+  const b = $('#bubble'), s = $('#sizzle');
+  if (b) { b.textContent = text; b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop'); }
+  if (s) s.classList.add('talk');
+  await speak(text, opts);
+  if (s) s.classList.remove('talk');
+}
+
+/* =========================================================
+   MICROPHONE
+   Works only where the page may use the mic (its own https
+   address). Everywhere else the games fall back to buttons.
+   ========================================================= */
+const mic = {state:'off', stream:null, src:null, an:null, proc:null, buf:null, td:null, floorS:null, floorV:null, recording:false, chunks:null};
+const micOn = () => mic.state === 'on';
+// While the game itself talks or hisses, the mic ignores what it hears.
+const busyOut = () => talking || performance.now() < outUntil;
+async function startMic(){
+  if (!save.mic) { mic.state = 'off'; return false; }
+  if (mic.state === 'on') return true;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.isSecureContext) { mic.state = 'unavailable'; return false; }
+  const a = audio(); if (!a) { mic.state = 'unavailable'; return false; }
+  try {
+    // Noise suppression would erase the very hiss we listen for, so it stays off.
+    mic.stream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false, noiseSuppression:false, autoGainControl:false}});
+  } catch (e) { mic.state = (e && (e.name === 'NotAllowedError' || e.name === 'SecurityError')) ? 'denied' : 'unavailable'; return false; }
+  if (a.state === 'suspended') { try { await a.resume(); } catch (e) {} }
+  mic.src = a.createMediaStreamSource(mic.stream);
+  mic.an = a.createAnalyser(); mic.an.fftSize = 2048; mic.an.smoothingTimeConstant = .25;
+  mic.src.connect(mic.an);
+  mic.buf = new Float32Array(mic.an.frequencyBinCount); mic.td = new Float32Array(mic.an.fftSize);
+  mic.proc = a.createScriptProcessor(4096, 1, 1);
+  const mute = a.createGain(); mute.gain.value = 0;
+  mic.src.connect(mic.proc); mic.proc.connect(mute); mute.connect(a.destination);
+  mic.proc.onaudioprocess = e => { if (mic.recording && mic.chunks) mic.chunks.push(new Float32Array(e.inputBuffer.getChannelData(0))); };
+  mic.floorS = mic.floorV = null; mic.state = 'on';
+  return true;
+}
+function stopMic(){
+  try { if (mic.stream) mic.stream.getTracks().forEach(t => t.stop()); if (mic.src) mic.src.disconnect(); if (mic.proc) mic.proc.disconnect(); } catch (e) {}
+  Object.assign(mic, {stream:null, src:null, an:null, proc:null, state:'off', floorS:null, floorV:null, recording:false, chunks:null});
+}
+function bandDb(lo, hi){
+  const hz = audio().sampleRate / mic.an.fftSize;
+  const i0 = Math.max(1, Math.round(lo/hz)), i1 = Math.min(mic.buf.length-1, Math.round(hi/hz));
+  let s = 0; for (let i=i0;i<=i1;i++) s += Math.pow(10, mic.buf[i]/10);
+  return 10*Math.log10(s/(i1-i0+1) + 1e-20);
+}
+// Sensitivity: how far above the room the hiss must be (m), how much brighter than an "sh" (t), and than the voice (l).
+const SENS = [{m:10,t:-1,l:-8},{m:15,t:2,l:-3},{m:20,t:5,l:0}];
+function listen(){
+  mic.an.getFloatFrequencyData(mic.buf); mic.an.getFloatTimeDomainData(mic.td);
+  let r = 0; for (let i=0;i<mic.td.length;i++) r += mic.td[i]*mic.td[i];
+  const vDb = 10*Math.log10(r/mic.td.length + 1e-12);
+  // A clear s is a hiss high up (5 to 11 kHz). A lisped "th" is weak and flat, an "sh" sits lower (2 to 4.5 kHz).
+  const sDb = bandDb(5000, 11000), shDb = bandDb(2000, 4500), lowDb = bandDb(100, 1500);
+  const quiet = busyOut();
+  if (mic.floorS === null) { mic.floorS = sDb; mic.floorV = vDb; }
+  const sAbove = sDb - mic.floorS, vAbove = vDb - mic.floorV;
+  if (!quiet) {
+    mic.floorS = sDb < mic.floorS ? sDb : mic.floorS + (sAbove < 6 ? .05 : .004);
+    mic.floorV = vDb < mic.floorV ? vDb : mic.floorV + (vAbove < 6 ? .05 : .004);
+  }
+  const k = SENS[save.sens] || SENS[1];
+  const isS = !quiet && sAbove > k.m && sDb - shDb > k.t && sDb - lowDb > k.l;
+  const voice = !quiet && (vAbove > 12 || isS);
+  return {isS, voice, quiet, power:Math.max(0, Math.min(1, sAbove/35))};
+}
+function recordUtterance({maxSec=4, endSilence=.7}={}){
+  let stopFlag = false, raf = 0;
+  const done = new Promise(res => {
+    mic.chunks = []; mic.recording = true;
+    const t0 = performance.now(); let last = t0, started = false, lastVoice = 0, sTime = 0;
+    const step = () => {
+      const now = performance.now(), dt = Math.min(.1, (now-last)/1000); last = now;
+      const f = listen();
+      if (f.voice) { started = true; lastVoice = now; }
+      if (f.isS) sTime += dt;
+      if (stopFlag || (started && now - lastVoice > endSilence*1000) || now - t0 > maxSec*1000) {
+        setTimeout(() => {
+          mic.recording = false; const ch = mic.chunks || []; mic.chunks = null;
+          let n = 0; ch.forEach(c => n += c.length); const data = new Float32Array(n); let o = 0; ch.forEach(c => { data.set(c, o); o += c.length; });
+          res({voice:started, sTime, data});
+        }, 200);
+        return;
+      }
+      raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+  });
+  const h = {done, stop(){ stopFlag = true; }};
+  cleanups.push(() => { cancelAnimationFrame(raf); mic.recording = false; mic.chunks = null; });
+  return h;
+}
+// Plays the recording back, trimmed and made louder, so he hears himself right away.
+function playBack(data){
+  return new Promise(res => {
+    const a = audio(); if (!a || !data || !data.length) return res();
+    let peak = 0; for (let i=0;i<data.length;i++) { const v = Math.abs(data[i]); if (v > peak) peak = v; }
+    if (peak < .003) return res();
+    const thr = Math.max(.01, peak*.08); let i0 = 0, i1 = data.length-1;
+    while (i0 < i1 && Math.abs(data[i0]) < thr) i0++;
+    while (i1 > i0 && Math.abs(data[i1]) < thr) i1--;
+    const pad = Math.round(a.sampleRate*.12); i0 = Math.max(0, i0-pad); i1 = Math.min(data.length-1, i1+pad);
+    const seg = data.subarray(i0, i1+1), b = a.createBuffer(1, seg.length, a.sampleRate); b.getChannelData(0).set(seg);
+    const s = a.createBufferSource(), g = a.createGain(); s.buffer = b; g.gain.value = Math.min(4, .8/peak);
+    s.connect(g).connect(a.destination);
+    const sec = seg.length / a.sampleRate; markOut(sec);
+    let done = false; const fin = () => { if (!done) { done = true; res(); } };
+    s.onended = fin; setTimeout(fin, sec*1000 + 400); s.start();
+  });
+}
+
+/* =========================================================
+   STARFIELD
+   ========================================================= */
+const cv = $('#stars'), cx = cv.getContext('2d');
+const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let W = 0, H = 0, warpUntil = 0;
+const STARS = Array.from({length:180}, () => ({x:Math.random()*2-1, y:Math.random()*2-1, z:Math.random()}));
+function resize(){ const d = Math.min(2, devicePixelRatio || 1); W = cv.width = innerWidth*d; H = cv.height = innerHeight*d; }
+addEventListener('resize', resize); resize();
+function drawStars(t){
+  cx.fillStyle = '#0a0b24'; cx.fillRect(0,0,W,H);
+  const speed = calm ? 0 : (t < warpUntil ? .03 : .0018);
+  for (const s of STARS) {
+    s.z -= speed; if (s.z <= .02) { s.x = Math.random()*2-1; s.y = Math.random()*2-1; s.z = 1; }
+    const k = .5 / s.z, px = W/2 + s.x*k*W*.5, py = H/2 + s.y*k*H*.5;
+    if (px<0||px>W||py<0||py>H) { s.z = 1; continue; }
+    const r = Math.max(.5, (1-s.z)*2.6) * (W/innerWidth);
+    cx.fillStyle = s.z < .3 ? '#ffe9a8' : '#c9c6ff';
+    cx.globalAlpha = Math.min(1, 1.2-s.z);
+    if (t < warpUntil && !calm) { cx.fillRect(px, py, r, r*6); } else { cx.beginPath(); cx.arc(px, py, r, 0, 6.283); cx.fill(); }
+  }
+  cx.globalAlpha = 1;
+  requestAnimationFrame(drawStars);
+}
+requestAnimationFrame(drawStars);
+const warp = (ms=700) => { warpUntil = performance.now() + ms; };
+
+/* =========================================================
+   PARTICLES
+   ========================================================= */
+function burst(x, y, {n=14, chars=['✦','★','•','✸']}={}){
+  for (let i=0;i<n;i++){
+    const s = document.createElement('span'); s.className = 'spark c' + (1+Math.floor(Math.random()*4)); s.textContent = rand(chars);
+    const a = Math.random()*Math.PI*2, d = 50 + Math.random()*100;
+    s.style.cssText = `left:${x}px;top:${y}px;--dx:${Math.cos(a)*d}px;--dy:${Math.sin(a)*d}px;font-size:${12+Math.random()*20}px`;
+    fx.appendChild(s); setTimeout(() => s.remove(), 950);
+  }
+}
+function center(el){ const r = el.getBoundingClientRect(); return [r.left + r.width/2, r.top + r.height/2]; }
+function burstAt(el, opts){ if (el && el.isConnected) { const [x,y] = center(el); burst(x, y, opts); } }
+function floatText(text, el){
+  if (!el || !el.isConnected) return; const [x,y] = center(el);
+  const s = document.createElement('span'); s.className = 'xpfloat'; s.textContent = text; s.style.left = x+'px'; s.style.top = y+'px';
+  fx.appendChild(s); setTimeout(() => s.remove(), 1000);
+}
+function confetti(n=70){
+  for (let i=0;i<n;i++){
+    const c = document.createElement('i'); c.className = 'confetti';
+    c.style.cssText = `left:${Math.random()*100}%;background:var(${rand(['--gold','--cyan','--pink','--green'])});animation-delay:${Math.random()*.8}s;animation-duration:${1.8+Math.random()*1.4}s`;
+    fx.appendChild(c); setTimeout(() => c.remove(), 4000);
+  }
+}
+function laser(fromEl, toEl, box){
+  if (!fromEl || !toEl || !box) return;
+  const c = box.getBoundingClientRect(), a = fromEl.getBoundingClientRect(), b = toEl.getBoundingClientRect();
+  const x1 = a.left + a.width/2 - c.left, y1 = a.top + a.height*.25 - c.top, x2 = b.left + b.width/2 - c.left, y2 = b.top + b.height/2 - c.top;
+  const l = document.createElement('div'); l.className = 'beam';
+  l.style.cssText = `left:${x1}px;top:${y1}px;width:${Math.hypot(x2-x1,y2-y1)}px;transform:rotate(${Math.atan2(y2-y1,x2-x1)}rad)`;
+  box.appendChild(l); setTimeout(() => l.remove(), 360); sfx.laser();
+}
+
+/* =========================================================
+   HUD + XP
+   ========================================================= */
+function updateHUD(){
+  const r = rankOf(save.xp), base = RANKS[r][0], next = RANKS[r+1];
+  $('#hudName').textContent = save.name;
+  $('#hudRank').textContent = RANKS[r][1];
+  $('#xpfill').style.width = (next ? (save.xp-base)/(next[0]-base)*100 : 100) + '%';
+  $('#xptext').textContent = next ? `${save.xp} / ${next[0]} XP` : `${save.xp} XP`;
+  $('#hudStars').textContent = totalStars();
+  $('#sndBtn').textContent = save.sound ? '🔊' : '🔇';
+}
+function addXP(n, el){ save.xp += n; session.xp += n; persist(); updateHUD(); floatText('+' + n, el); }
+$('#sndBtn').onclick = () => { save.sound = !save.sound; persist(); updateHUD(); sfx.blip(); };
+$('#parentBtn').onclick = () => openParents();
+
+/* =========================================================
+   SCREENS
+   ========================================================= */
+function render(html){ screen.innerHTML = html; screen.scrollTop = 0; }
+
+function showTitle(){
+  stopGame(); $('#hud').hidden = true;
+  render(`<section class="title">
+    <div class="logo"><span class="who">${esc(save.name)}'s</span><span class="big"><span class="s">S</span> Galaxy</span></div>
+    <div class="mascot" aria-hidden="true">🐍</div>
+    <p class="tag">Practise the snake sound. Win stars. Beat the Snake King.</p>
+    <button class="btn xl pulse" id="play">▶ PLAY</button>
+  </section>`);
+  $('#play').onclick = () => {
+    audio(); if (save.mic) startMic(); pickVoice(); try { navigator.wakeLock && navigator.wakeLock.request('screen').catch(()=>{}); } catch (e) {}
+    sfx.up(); warp(900); $('#hud').hidden = false; updateHUD();
+    showMap(true);
+  };
+}
+
+function showMap(greet){
+  stopGame(); $('#hud').hidden = false; updateHUD();
+  const nextIdx = PLANETS.findIndex((p,i) => isOpen(i) && !save.stars[p.id]);
+  const today = new Date(), days = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+  const week = Array.from({length:7}, (_,k) => { const d = new Date(today); d.setDate(today.getDate()-(6-k)); return `<span><i class="${save.days.includes(dayKey(d))?'on':''}">${save.days.includes(dayKey(d))?'★':''}</i>${days[d.getDay()]}</span>`; }).join('');
+  const nodes = PLANETS.map((p,i) => {
+    const open = isOpen(i), st = save.stars[p.id] || 0, [r,c] = GRID[i];
+    return `<li class="node" style="grid-row:${r};grid-column:${c}">
+      <button class="planet${p.boss?' boss':''}${open?'':' locked'}${i===nextIdx?' next':''}" style="--pc:${p.color}" data-i="${i}" aria-label="${esc(p.name)}${open?'':' (locked)'}">${open ? p.icon : '🔒'}</button>
+      <span class="pname">${esc(p.name)}</span>
+      <span class="pstars" aria-label="${st} of 3 stars"><b>${'★'.repeat(st)}</b>${'★'.repeat(3-st)}</span>
+    </li>`;
+  }).join('');
+  render(`<section class="map">
+    <div class="maphead">
+      <h1>${esc(save.name)}'s <span class="s">S</span> Galaxy</h1>
+      <div class="thisweek"><span>This week's sound: <b>s</b> like 🐍</span><div class="week" aria-label="Days practised this week">${week}</div></div>
+    </div>
+    <div class="coach"><div class="sizzle" id="sizzle" aria-hidden="true">🐍</div><div class="bubble" id="bubble" aria-live="polite"></div></div>
+    <ol class="path">
+      <svg viewBox="0 0 300 444" preserveAspectRatio="none" aria-hidden="true"><polyline vector-effect="non-scaling-stroke" points="50,60 150,60 250,60 250,208 150,208 50,208 50,356 150,356 250,356"/></svg>
+      ${nodes}
+    </ol>
+    <div class="mapfoot"><button class="btn cyan" id="stickBtn">🏆 My stickers ${save.stickers.length}/${STICKERS.length}</button></div>
+  </section>`);
+  screen.querySelectorAll('.planet').forEach(b => b.onclick = () => {
+    const i = +b.dataset.i;
+    if (!isOpen(i)) { sfx.bonk(); say('That planet is still locked. Finish the one before it first.'); return; }
+    startGame(i);
+  });
+  $('#stickBtn').onclick = openStickers;
+  const line = greet
+    ? (save.plays ? `Welcome back, Captain ${save.name}! Tap the glowing planet.` : `Hello ${save.name}! I'm Sizzle the snake. Let's practise my sound. Tap the glowing planet.`)
+    : (nextIdx >= 0 ? `Tap the glowing planet, ${save.name}.` : `You have been to every planet. Pick any one to play again.`);
+  say(line);
+}
+
+function startGame(i){
+  stopGame(); warp(); sfx.up();
+  session = {xp:0, rank0:rankOf(save.xp)};
+  const p = PLANETS[i]; p.play(p, i);
+}
+
+function frame(p, inner){
+  render(`<section class="game" style="--pc:${p.color}">
+    <div class="gbar"><button class="iconbtn" id="quit" aria-label="Back to the star map">✕</button><div class="gtitle">${p.icon} ${esc(p.name)}</div>${micOn() ? '<span class="micdot" title="The game can hear you">🎙️</span>' : ''}<div class="pips" id="pips"></div></div>
+    <div class="coach"><div class="sizzle" id="sizzle" aria-hidden="true">🐍</div><div class="bubble" id="bubble" aria-live="polite"></div></div>
+    <div class="stage" id="stage">${inner}</div>
+  </section>`);
+  $('#quit').onclick = () => showMap(false);
+}
+function pips(done, total){ const el = $('#pips'); if (el) el.innerHTML = Array.from({length:total}, (_,i) => `<i class="${i<done?'on':''}"></i>`).join(''); }
+
+/* =========================================================
+   PLANET 1: HISS ROCKET  (the sound on its own, held long)
+   ========================================================= */
+async function playHiss(p, idx){
+  const id = ++RUN, goals = [2,3,3,4,5], useMic = micOn();
+  let round = 0, retries = 0, state = 'intro', t0 = 0, raf = 0, launched = false, elapsed = 0, lastS = 0, noS = 0, lastHint = 0, lastT = 0;
+  frame(p, `<div class="launch"><div class="pad"></div><div class="flame" id="flame"></div><div class="rocket" id="rocket">🚀</div></div>
+    <div class="fuel" id="fuelbox"><i id="fuel"></i></div>
+    <div class="timer"><span id="secs">0.0</span> <small>of</small> <span id="goal">2</span> <small>seconds</small></div>
+    ${useMic ? `<div class="smeter" id="smeter"><span>SNAKE METER</span><div><i id="smf"></i></div></div>` : ''}
+    <button class="holdbtn${useMic ? ' listening' : ''}" id="hold" aria-label="${useMic ? 'The rocket is listening' : 'Hold while you say sss'}">${useMic ? '<span class="big">🎤</span><span class="small">JUST HISS</span>' : '<span class="big">sss</span><span class="small">HOLD &amp; HISS</span>'}</button>
+    <button class="btn ghost small" id="listen">🔊 Hear the snake sound</button>`);
+  pips(0, goals.length);
+  const hold = $('#hold'), fuel = $('#fuel'), box = $('#fuelbox'), secs = $('#secs'), rocket = $('#rocket'), flame = $('#flame');
+  function reset(){ launched = false; elapsed = 0; fuel.style.width = '0%'; box.classList.remove('full','bonus'); secs.textContent = '0.0'; $('#goal').textContent = goals[round]; rocket.className = 'rocket'; flame.style.height = '0px'; }
+  function show(){
+    const f = Math.min(1.5, elapsed / goals[round]);
+    fuel.style.width = Math.min(100, f*100) + '%'; flame.style.height = (12 + f*70) + 'px'; secs.textContent = elapsed.toFixed(1);
+    if (f >= 1 && !launched) { launched = true; box.classList.add('full'); sfx.up(); burstAt(box, {n:10}); }
+    if (f >= 1.4) box.classList.add('bonus');
+  }
+  reset();
+  $('#listen').onclick = () => { try { speechSynthesis.cancel(); } catch (e) {} sfx.hiss(2); };
+  function down(e){
+    if (useMic || state !== 'ready') return; if (e) e.preventDefault();
+    audio(); try { speechSynthesis.cancel(); } catch (_) {}
+    state = 'holding'; hold.classList.add('down'); rocket.classList.add('shake'); t0 = performance.now(); tick();
+  }
+  function tick(){
+    if (id !== RUN || state !== 'holding') return;
+    elapsed = (performance.now() - t0) / 1000; show();
+    raf = requestAnimationFrame(tick);
+  }
+  async function up(){
+    if (state !== 'holding') return;
+    state = 'busy'; if (!useMic) cancelAnimationFrame(raf); hold.classList.remove('down'); rocket.classList.remove('shake');
+    if (launched) {
+      const bonus = elapsed >= goals[round]*1.4;
+      rocket.classList.add('go'); sfx.boom(); burstAt(rocket, {n:24}); warp(600);
+      addXP(10 + (bonus?5:0), hold);
+      round++; pips(round, goals.length);
+      await say(bonus ? `${rand(PRAISE)} Bonus power!` : `${praise()} Lift off!`); if (id !== RUN) return;
+      if (round >= goals.length) return finish(p, idx, retries<=2 ? 3 : retries<=5 ? 2 : 1);
+      await sleep(300); if (id !== RUN) return;
+      reset(); state = 'ready';
+      say(`Now hiss for ${goals[round]} seconds.`);
+    } else if (useMic && elapsed < .4) {
+      reset(); state = 'ready';
+    } else {
+      retries++; flame.style.height = '0px';
+      await say(!useMic && elapsed < .5 ? 'Keep holding the button while you hiss.' : 'Nearly! Keep your hiss going a bit longer.'); if (id !== RUN) return;
+      reset(); state = 'ready';
+    }
+  }
+  // Mic mode: the rocket only fuels while it hears a sharp s.
+  function micLoop(t){
+    if (id !== RUN) return;
+    const dt = lastT ? Math.min(.1, (t - lastT)/1000) : 0; lastT = t;
+    const f = listen();
+    $('#smf').style.width = (f.power*100) + '%'; $('#smeter').classList.toggle('on', f.isS); hold.classList.toggle('down', f.isS);
+    if (state === 'ready' && f.isS) { state = 'holding'; t0 = t; lastS = t; rocket.classList.add('shake'); }
+    if (state === 'holding') {
+      if (f.isS) lastS = t;
+      elapsed = (lastS - t0) / 1000; show();
+      if (t - lastS > 300) up();
+    }
+    if (state === 'ready' && f.voice && !f.isS) {
+      noS += dt;
+      if (noS > .8 && t - lastHint > 10000) { lastHint = t; noS = 0; say('Make it sharper. Smile, teeth together, tongue behind your teeth.'); }
+    } else if (!f.voice) noS = Math.max(0, noS - dt);
+    raf = requestAnimationFrame(micLoop);
+  }
+  if (useMic) {
+    raf = requestAnimationFrame(micLoop);
+  } else {
+    hold.addEventListener('pointerdown', e => { try { hold.setPointerCapture(e.pointerId); } catch (_) {} down(e); });
+    const upH = () => up();
+    const kd = e => { if (e.code === 'Space' && !e.repeat) { e.preventDefault(); down(); } };
+    const ku = e => { if (e.code === 'Space') { e.preventDefault(); up(); } };
+    addEventListener('pointerup', upH); addEventListener('pointercancel', upH); addEventListener('keydown', kd); addEventListener('keyup', ku);
+    cleanups.push(() => { removeEventListener('pointerup', upH); removeEventListener('pointercancel', upH); removeEventListener('keydown', kd); removeEventListener('keyup', ku); });
+  }
+  hold.addEventListener('contextmenu', e => e.preventDefault());
+  cleanups.push(() => cancelAnimationFrame(raf));
+
+  await say('Smile. Teeth together. Tongue behind your top teeth.'); if (id !== RUN) return;
+  await say('Now let the air hiss out, like this.'); if (id !== RUN) return;
+  sfx.hiss(2); await sleep(2200); if (id !== RUN) return;
+  state = 'ready';
+  say(useMic ? `Your turn! Hiss at the rocket for ${goals[0]} seconds. It can hear you.` : `Your turn! Hold the pink button and hiss for ${goals[0]} seconds.`);
+}
+
+/* =========================================================
+   PLANET 2: SOUND HUNT  (hear which word starts with s)
+   ========================================================= */
+async function playHunt(p, idx){
+  const id = ++RUN, rounds = 8;
+  let r = 0, mistakes = 0, combo = 0, busy = true, tok = 0;
+  const sPool = shuffle([...WORDS.start, ...WORDS.blends]), dPool = shuffle(OTHER);
+  frame(p, `<div class="combo" id="combo"></div><div class="rocks" id="rocks"></div><div class="shipwrap"><div class="ship" id="ship">🚀</div></div>`);
+  pips(0, rounds);
+  const stage = $('#stage'), rocks = $('#rocks'), ship = $('#ship');
+
+  async function next(){
+    if (id !== RUN) return;
+    if (r >= rounds) return finish(p, idx, mistakes<=1 ? 3 : mistakes<=3 ? 2 : 1);
+    const my = ++tok, target = sPool[r % sPool.length];
+    const opts = shuffle([target, dPool[(2*r) % dPool.length], dPool[(2*r+1) % dPool.length]]);
+    rocks.innerHTML = opts.map((o,k) => `<div class="rock" style="--d:${-k*.9}s"><button class="rockbtn" aria-label="${o.w}">${o.e}</button><button class="ear" aria-label="Hear ${o.w}">🔊</button></div>`).join('');
+    busy = false;
+    [...rocks.children].forEach((el,k) => {
+      el.querySelector('.ear').onclick = () => speak(opts[k].w);
+      el.querySelector('.rockbtn').onclick = () => pick(el, opts[k], opts[k] === target);
+    });
+    for (let k=0; k<opts.length; k++) {
+      if (id !== RUN || my !== tok || busy) return;
+      const el = rocks.children[k]; el.classList.add('lit'); await speak(opts[k].w); el.classList.remove('lit'); await sleep(250);
+    }
+  }
+  async function pick(el, o, ok){
+    if (busy) return;
+    if (ok) {
+      busy = true; tok++; try { speechSynthesis.cancel(); } catch (e) {}
+      laser(ship, el, stage); combo++;
+      setTimeout(() => { sfx.boom(); burstAt(el, {n:22}); el.classList.add('boom'); }, 160);
+      addXP(10 + (combo>=3 ? 5 : 0), el);
+      $('#combo').textContent = combo >= 2 ? `Combo ×${combo}` : '';
+      r++; pips(r, rounds);
+      await say(`${rand(PRAISE)} ${cap(o.w)} starts with the snake sound.`); if (id !== RUN) return;
+      next();
+    } else {
+      mistakes++; combo = 0; $('#combo').textContent = ''; sfx.bonk();
+      el.classList.remove('no'); void el.offsetWidth; el.classList.add('no');
+      say(`That's ${o.w}. Listen for the snake sound.`);
+    }
+  }
+  await say('Zap the picture that starts with the snake sound.'); if (id !== RUN) return;
+  sfx.hiss(1.1); await sleep(1250); if (id !== RUN) return;
+  next();
+}
+
+/* =========================================================
+   PLANETS 3 to 6: SAY IT  (start, end, middle, s-teams)
+   ========================================================= */
+async function playSay(p, idx){
+  const id = ++RUN, list = shuffle(WORDS[p.list]).slice(0, 8), useMic = micOn();
+  let i = 0, reps = 0, lastTap = 0, busy = true, rec = null;
+  const SAY = useMic ? '🎤 Say it!' : 'I said it!';
+  frame(p, `<div class="card" id="card"><div class="pic" id="pic"></div><div class="word" id="word"></div></div>
+    <div class="row"><button class="btn cyan small" id="hear">🔊 Hear it</button><button class="btn cyan small" id="slow">🐢 Slow</button></div>
+    <div class="charges" id="charges" aria-label="Times said"><i></i><i></i><i></i></div>
+    <button class="btn xl" id="said">${SAY}</button>
+    <div class="hint">${useMic ? 'Tap the button, say the word, then listen to yourself.' : 'Say the word out loud, then press the button.'}</div>`);
+  pips(0, list.length);
+  const card = $('#card'), saidBtn = $('#said');
+  $('#hear').onclick = () => speak(list[i].w);
+  $('#slow').onclick = () => {
+    const w = list[i].w;
+    if (p.list === 'end') speak(w, {rate:.6}).then(() => { if (id === RUN) sfx.hiss(.8); });
+    else if (p.list === 'middle') speak(w, {rate:.5});
+    else { try { speechSynthesis.cancel(); } catch (e) {} sfx.hiss(.8); setTimeout(() => { if (id === RUN) speak(w, {rate:.6}); }, 850); }
+  };
+  async function counted(){
+    reps++; const pip = $('#charges').children[reps-1]; pip.classList.add('on');
+    sfx.coin(); addXP(3, saidBtn); burstAt(pip, {n:8});
+    if (reps < 3) { say(rand(AGAIN)); return; }
+    busy = true; card.classList.remove('in'); card.classList.add('out'); sfx.boom(); burstAt(card, {n:28});
+    addXP(5, card); i++; pips(i, list.length);
+    await say(praise()); if (id !== RUN) return;
+    if (i >= list.length) return finish(p, idx, 3);
+    show();
+  }
+  saidBtn.onclick = async () => {
+    if (!useMic) { const now = Date.now(); if (busy || now - lastTap < 600) return; lastTap = now; return counted(); }
+    if (rec) { rec.stop(); return; }
+    if (busy) return; busy = true;
+    try { speechSynthesis.cancel(); } catch (e) {}
+    saidBtn.classList.add('rec'); saidBtn.textContent = '● Listening…';
+    rec = recordUtterance({maxSec:4, endSilence:.7});
+    const r = await rec.done; rec = null; if (id !== RUN) return;
+    saidBtn.classList.remove('rec');
+    if (!r.voice) { saidBtn.textContent = SAY; busy = false; say("I didn't hear you. Try again, a little louder."); return; }
+    saidBtn.textContent = '🔊 That was you!';
+    await playBack(r.data); if (id !== RUN) return;
+    saidBtn.textContent = SAY;
+    if (r.sTime >= .07) {
+      floatText('Snake sound! 🐍', card); addXP(2, saidBtn);
+      $('#word').querySelectorAll('.s').forEach(s => { s.classList.remove('flash'); void s.offsetWidth; s.classList.add('flash'); });
+    }
+    busy = false;
+    counted();
+  };
+  async function show(){
+    reps = 0; [...$('#charges').children].forEach(c => c.classList.remove('on'));
+    const it = list[i]; $('#pic').textContent = it.e; $('#word').innerHTML = hl(it.w);
+    card.classList.remove('out','in'); void card.offsetWidth; card.classList.add('in'); sfx.blip();
+    busy = false;
+    await say(`Say ${it.w}.`);
+  }
+  const intro = {
+    start: 'In these words the snake sound comes first.',
+    end: 'In these words the snake sound comes at the end.',
+    middle: 'In these words the snake sound hides in the middle.',
+    blends: 'Here the snake sound teams up with another sound.'
+  }[p.list];
+  $('#pic').textContent = list[0].e; $('#word').innerHTML = hl(list[0].w);
+  await say(`${intro} Say each word three times.`); if (id !== RUN) return;
+  show();
+}
+
+/* =========================================================
+   PLANET 7: LETTER LASERS  (spot the letter s)
+   ========================================================= */
+async function playLetters(p, idx){
+  const id = ++RUN, GOAL = 15, TIME = 60;
+  let zapped = 0, wrong = 0, items = [], last = 0, spawnT = 0, el = 0, sinceS = 0, raf = 0, running = false;
+  frame(p, `<div class="lhud"><span>Zapped <b id="zc">0</b> / ${GOAL}</span><div class="tbar" aria-hidden="true"><i id="tb"></i></div></div>
+    <div class="field" id="field"><div class="shipwrap"><div class="ship" id="ship">🚀</div></div></div>`);
+  pips(0, 0);
+  const field = $('#field'), ship = $('#ship');
+  function spawn(){
+    const isS = sinceS >= 2 || Math.random() < .45; sinceS = isS ? 0 : sinceS + 1;
+    const ch = isS ? rand(['s','s','S']) : rand(DECOY);
+    const b = document.createElement('button'); b.className = 'letter'; b.textContent = ch; b.setAttribute('aria-label', 'letter ' + ch);
+    b.style.left = (10 + Math.random()*80) + '%';
+    const it = {el:b, y:-70, v:(field.clientHeight + 70) / Math.max(4.5, 7 - el/25), isS, dead:false};
+    b.addEventListener('pointerdown', e => { e.preventDefault(); hit(it); });
+    field.appendChild(b); items.push(it);
+  }
+  function hit(it){
+    if (it.dead || !running) return;
+    if (it.isS) {
+      it.dead = true; laser(ship, it.el, field); zapped++; $('#zc').textContent = zapped;
+      sfx.hiss(.35); it.el.classList.add('zap'); burstAt(it.el, {n:12}); addXP(5, it.el);
+      setTimeout(() => it.el.remove(), 420);
+      if (zapped >= GOAL) end();
+    } else if (!it.el.classList.contains('bad')) { wrong++; sfx.bonk(); it.el.classList.add('bad'); }
+  }
+  function loop(t){
+    if (id !== RUN || !running) return;
+    const dt = Math.min(.05, (t - last) / 1000); last = t; el += dt; spawnT -= dt;
+    if (spawnT <= 0) { spawn(); spawnT = Math.max(.8, 1.3 - el/70); }
+    const fh = field.clientHeight;
+    for (const it of items) {
+      if (it.dead) continue;
+      it.y += it.v * dt; it.el.style.top = it.y + 'px';
+      if (it.y > fh - 20) { it.dead = true; it.el.classList.add('gone'); setTimeout(() => it.el.remove(), 300); }
+    }
+    items = items.filter(x => !x.dead);
+    $('#tb').style.width = Math.max(0, 100 - el/TIME*100) + '%';
+    if (el >= TIME) return end();
+    raf = requestAnimationFrame(loop);
+  }
+  async function end(){
+    if (!running) return; running = false; cancelAnimationFrame(raf);
+    const stars = zapped >= GOAL && wrong <= 2 ? 3 : zapped >= 10 ? 2 : 1;
+    await say(zapped >= GOAL ? 'You zapped them all!' : 'Time is up!'); if (id !== RUN) return;
+    finish(p, idx, stars);
+  }
+  cleanups.push(() => cancelAnimationFrame(raf));
+  await say('Zap every letter s. Big S and little s. Leave the other letters alone.'); if (id !== RUN) return;
+  running = true; last = performance.now(); raf = requestAnimationFrame(loop);
+}
+
+/* =========================================================
+   PLANET 8: READING RINGS  (read a short word, pick the picture)
+   ========================================================= */
+async function playRead(p, idx){
+  const id = ++RUN, list = shuffle(READ).slice(0, 8);
+  let i = 0, mistakes = 0, hints = 0, used = false, busy = true;
+  frame(p, `<div class="readw" id="rw"></div>
+    <button class="btn ghost small" id="hint">🔊 Help me read it</button>
+    <div class="choices" id="ch"></div>`);
+  pips(0, list.length);
+  $('#hint').onclick = () => { if (!used) { used = true; hints++; } speak(list[i].w, {rate:.7}); };
+  function show(){
+    used = false; busy = false;
+    const it = list[i], opts = shuffle([it, ...shuffle(READ.filter(x => x !== it)).slice(0, 2)]);
+    $('#rw').innerHTML = it.w.split('').map(ch => `<span class="lt${ch==='s'?' s':''}">${ch}</span>`).join('');
+    $('#rw').querySelectorAll('.lt.s').forEach(s => s.onclick = () => sfx.hiss(.6));
+    $('#ch').innerHTML = opts.map(o => `<button class="choice" aria-label="${o.w}">${o.e}</button>`).join('');
+    [...$('#ch').children].forEach((b,k) => b.onclick = () => pick(b, opts[k] === it));
+  }
+  async function pick(b, ok){
+    if (busy) return;
+    if (ok) {
+      busy = true; b.classList.add('yes'); sfx.coin(); burstAt(b, {n:22}); addXP(used ? 8 : 15, b);
+      const w = list[i].w; i++; pips(i, list.length);
+      await say(`${rand(PRAISE)} It says ${w}.`); if (id !== RUN) return;
+      if (i >= list.length) return finish(p, idx, mistakes<=1 && hints<=3 ? 3 : mistakes<=4 ? 2 : 1);
+      show();
+    } else {
+      mistakes++; sfx.bonk(); b.classList.remove('no'); void b.offsetWidth; b.classList.add('no');
+      say('Look at the letters again.');
+    }
+  }
+  show(); busy = true;
+  await say('Read the word, then tap the right picture. Tap the gold s to hear its sound.'); if (id !== RUN) return;
+  busy = false;
+}
+
+/* =========================================================
+   PLANET 9: SNAKE KING  (read and say whole sentences)
+   ========================================================= */
+async function playBoss(p, idx){
+  const id = ++RUN, total = SENTENCES.length, useMic = micOn();
+  let k = 0, hp = total, busy = true, rec = null;
+  const SAY = useMic ? '🎤 Read it out loud' : '⚡ I said it!';
+  frame(p, `<div class="bossbar"><span>SNAKE KING</span><div><i id="hpb"></i></div></div>
+    <div class="king" id="king" aria-label="The Snake King"><span class="crown">👑</span>🐍</div>
+    <div class="sentence" id="sent"></div>
+    <div class="row"><button class="btn cyan small" id="hear">🔊 Read it to me</button></div>
+    <button class="btn xl" id="said">${SAY}</button>`);
+  pips(0, total);
+  const king = $('#king'), saidBtn = $('#said'), stage = $('#stage');
+  const bossSay = t => say(t, {pitch:.45, rate:.85});
+  function show(){
+    const words = SENTENCES[k].split(' ');
+    $('#sent').innerHTML = words.map(w => `<button>${hl(w)}</button>`).join('');
+    [...$('#sent').children].forEach((b,j) => b.onclick = () => speak(words[j].replace(/[^a-z']/gi, '')));
+  }
+  async function readAlong(){
+    const btns = [...$('#sent').children], words = SENTENCES[k].split(' ');
+    for (let j=0; j<btns.length; j++) {
+      if (id !== RUN) return;
+      btns[j].classList.add('on'); await speak(words[j].replace(/[^a-z']/gi, ''), {rate:.8}); btns[j].classList.remove('on');
+    }
+  }
+  $('#hear').onclick = readAlong;
+  async function hit(crit){
+    laser(saidBtn, king, stage);
+    setTimeout(() => { sfx.boom(); burstAt(king, {n:20}); king.classList.remove('hit'); void king.offsetWidth; king.classList.add('hit'); }, 150);
+    if (crit) { floatText('CRITICAL S HIT!', king); addXP(10, saidBtn); burstAt(king, {n:30, chars:['🐍','✦','★']}); }
+    hp--; $('#hpb').style.width = (hp/total*100) + '%'; addXP(20, king); k++; pips(k, total);
+    if (hp <= 0) {
+      await sleep(400); king.classList.add('dead'); sfx.fanfare(); confetti(90); burstAt(king, {n:40}); warp(1200);
+      await say(`You beat the Snake King! You are a snake sound superstar, ${save.name}!`); if (id !== RUN) return;
+      addXP(50, saidBtn);
+      return finish(p, idx, 3);
+    }
+    await bossSay(rand(['Ouch! Lucky shot!', 'Grr! Is that all?', 'Oh no! My crown!', 'You can not beat me!'])); if (id !== RUN) return;
+    show(); busy = false;
+    say('Read the next one out loud.');
+  }
+  saidBtn.onclick = async () => {
+    if (!useMic) { if (busy) return; busy = true; return hit(false); }
+    if (rec) { rec.stop(); return; }
+    if (busy) return; busy = true;
+    try { speechSynthesis.cancel(); } catch (e) {}
+    saidBtn.classList.add('rec'); saidBtn.textContent = '● Listening…';
+    rec = recordUtterance({maxSec:9, endSilence:1.1});
+    const r = await rec.done; rec = null; if (id !== RUN) return;
+    saidBtn.classList.remove('rec'); saidBtn.textContent = SAY;
+    if (!r.voice) { busy = false; say("I didn't hear you. Read it nice and loud."); return; }
+    hit(r.sTime >= .15);
+  };
+  show();
+  await bossSay('Ha ha ha! I am the Snake King. Only a snake sound hero can beat me!'); if (id !== RUN) return;
+  sfx.hiss(1);
+  await say(useMic ? `Tap the button and read each sentence out loud, ${save.name}. Every one you say zaps the king!` : `Read each sentence out loud, ${save.name}. Every one you say zaps the king!`); if (id !== RUN) return;
+  busy = false;
+}
+
+/* =========================================================
+   RESULTS
+   ========================================================= */
+function finish(p, idx, stars){
+  stopGame();
+  const best = Math.max(save.stars[p.id] || 0, stars); save.stars[p.id] = best;
+  const unlockedNew = !save.allOpen && idx + 1 < PLANETS.length && save.unlocked < idx + 2;
+  if (save.unlocked < idx + 2) save.unlocked = Math.min(PLANETS.length, idx + 2);
+  const left = STICKERS.filter(s => !save.stickers.includes(s)); let sticker = null;
+  if (left.length) { sticker = rand(left); save.stickers.push(sticker); }
+  save.plays++; markDay(); persist(); updateHUD();
+  const r1 = rankOf(save.xp), rankUp = r1 > session.rank0;
+  const nextI = idx + 1 < PLANETS.length && isOpen(idx + 1) ? idx + 1 : -1;
+  render(`<section class="results">
+    <div class="rtitle">${p.boss ? 'YOU WON!' : 'MISSION COMPLETE!'}</div>
+    <div class="rstars" aria-label="${stars} of 3 stars"><span>★</span><span>★</span><span>★</span></div>
+    <div class="rline">+${session.xp} XP</div>
+    ${unlockedNew ? `<div class="rline cyan">New planet unlocked: ${PLANETS[idx+1].icon} ${esc(PLANETS[idx+1].name)}</div>` : ''}
+    <div class="sticker" id="stk">${sticker ? `<span class="em">${sticker}</span><small>New sticker for your collection</small>` : ''}</div>
+    <div id="rk"></div>
+    <div class="row">
+      <button class="btn ghost" id="again">↻ Play again</button>
+      <button class="btn cyan" id="mapb">Star map</button>
+      ${nextI >= 0 ? `<button class="btn" id="nextb">Next ▶</button>` : ''}
+    </div>
+  </section>`);
+  const ss = [...screen.querySelectorAll('.rstars span')];
+  ss.forEach((s,j) => { if (j < stars) setTimeout(() => { s.classList.add('got'); sfx.coin(); burstAt(s, {n:10}); }, 400 + j*380); });
+  setTimeout(() => { const st = $('#stk'); if (st) { st.classList.add('show'); if (sticker) sfx.up(); } }, 500 + stars*380);
+  if (rankUp) setTimeout(() => { const rk = $('#rk'); if (rk) { rk.innerHTML = `<div class="rankup">RANK UP! ${RANKS[r1][1]}</div>`; sfx.fanfare(); confetti(); } }, 1000 + stars*380);
+  if (stars === 3) setTimeout(() => confetti(50), 400 + 3*380);
+  speak(`${p.boss ? 'Victory!' : 'Mission complete!'} You got ${stars} star${stars>1?'s':''}.${rankUp ? ` You are now a ${RANKS[r1][1]}!` : ''}`);
+  $('#again').onclick = () => startGame(idx);
+  $('#mapb').onclick = () => showMap(false);
+  if (nextI >= 0) $('#nextb').onclick = () => startGame(nextI);
+}
+
+/* =========================================================
+   MODALS
+   ========================================================= */
+function modal(html){
+  const root = $('#modalRoot');
+  root.innerHTML = `<div class="modal" id="mbg"><div class="sheet" role="dialog" aria-modal="true">${html}</div></div>`;
+  $('#mbg').onclick = e => { if (e.target.id === 'mbg') closeModal(); };
+  root.querySelectorAll('[data-close]').forEach(b => b.onclick = closeModal);
+}
+function closeModal(){ $('#modalRoot').innerHTML = ''; }
+
+function openStickers(){
+  sfx.blip();
+  modal(`<h2>🏆 Sticker collection</h2>
+    <p class="muted">You win a new sticker every time you finish a planet.</p>
+    <div class="stickers">${STICKERS.map(s => save.stickers.includes(s) ? `<span>${s}</span>` : `<span class="no">?</span>`).join('')}</div>
+    <div class="row"><button class="btn" data-close>Close</button></div>`);
+}
+
+function openParents(){
+  const vName = voice ? `${voice.name} (${voice.lang})` : 'Ingen engelsk röst hittades på den här enheten';
+  const micText = () => ({
+    on: 'På. Hiss Rocket lyssnar efter ett skarpt s och på ordplaneterna hör han sin egen röst direkt efteråt.',
+    off: 'Av. Spelet använder knapparna i stället.',
+    denied: 'Blockerad. På claude.ai går mikrofonen inte att använda, där körs knappversionen. På spelets egen adress: tillåt mikrofonen för sidan i webbläsarens inställningar och ladda om.',
+    unavailable: 'Finns inte här. Sidan behöver öppnas via https i Safari eller Chrome.'
+  })[mic.state];
+  modal(`<h2>För vuxna</h2>
+    <p>Spelet tränar veckans läxa från logopeden: ljudet <b>s</b>. Planeterna går i samma ordning som logopeder brukar arbeta: först ljudet ensamt, sedan att höra det, sedan i ord (först, sist, i mitten och tillsammans med andra ljud), därefter bokstaven, läsning och till sist hela meningar.</p>
+    <h3>Mikrofonen</h3>
+    <p id="micStatus">${micText()}</p>
+    <label class="check"><input type="checkbox" id="pMic" ${save.mic?'checked':''}> Använd mikrofonen</label>
+    <div class="smeter" id="pMeter" ${micOn()?'':'hidden'}><span>Säg sss för att testa</span><div><i></i></div></div>
+    <div class="field-row"><label for="pSens">Hur skarpt s mätaren kräver</label>
+      <select id="pSens"><option value="0">Snällt (början)</option><option value="1">Normalt</option><option value="2">Strikt</option></select></div>
+    <p class="muted">Mätaren känner igen ett s på att väsljudet ligger högt i tonhöjd. Ett läspande "th" är svagare och plattare, ett "sje" ligger lägre. Den är grov och ersätter inte ditt öra: om den inte reagerar på ett s som låter rätt, välj Snällt. Inget spelas in i Hiss Rocket, och de korta inspelningarna på ordplaneterna spelas upp en gång och sparas aldrig. Inget lämnar enheten.</p>
+    <h3>Så får ni ut mest av det</h3>
+    <ul>
+      <li>Fem till tio minuter om dagen räcker. Ofta och kort ger mer än långt och sällan.</li>
+      <li>Sitt gärna bredvid. Det är upprepningarna som tränar munnen, och ditt beröm som får honom att vilja fortsätta.</li>
+      <li>Ett bra s: le, tänderna nästan ihop, tungspetsen bakom övre framtänderna och tungan inne i munnen. Om tungan sticker ut blir det ett läspande "th".</li>
+      <li>Beröm försöket, inte bara träffen. Om logopeden vill att ni bara övar en position (t.ex. s först i ordet), lås upp alla planeter nedan och välj den planeten.</li>
+      <li>Rösten är brittisk engelska om enheten har en sådan. Just nu används: <b>${esc(vName)}</b>. På iPad: Inställningar → Hjälpmedel → Uppläst innehåll → Röster → Engelska (Storbritannien).</li>
+    </ul>
+    <div class="field-row"><label for="pName">Spelarens namn</label><input type="text" id="pName" maxlength="20" value="${esc(save.name)}"></div>
+    <div class="field-row"><label for="pRate">Rösthastighet</label><input type="range" id="pRate" min="0.6" max="1.2" step="0.05" value="${save.rate}"></div>
+    <label class="check"><input type="checkbox" id="pVoice" ${save.voice?'checked':''}> Uppläsning på</label>
+    <label class="check"><input type="checkbox" id="pOpen" ${save.allOpen?'checked':''}> Lås upp alla planeter</label>
+    <p class="muted">Framstegen sparas bara i den här webbläsaren, på den här enheten.</p>
+    <div class="row">
+      <button class="btn ghost small" id="pTest">🔊 Testa rösten</button>
+      <button class="btn ghost small" id="pReset">Nollställ framsteg</button>
+      <button class="btn" id="pDone">Klar</button>
+    </div>`);
+  $('#pSens').value = String(save.sens);
+  const refresh = () => { $('#micStatus').textContent = micText(); $('#pMeter').hidden = !micOn(); };
+  $('#pMic').onchange = async e => {
+    save.mic = e.target.checked; persist();
+    if (save.mic) { await startMic(); } else { stopMic(); }
+    if ($('#micStatus')) refresh();
+  };
+  $('#pSens').onchange = e => { save.sens = +e.target.value; persist(); };
+  const meter = () => {
+    const m = $('#pMeter'); if (!m) return;
+    if (micOn()) { const f = listen(); m.querySelector('i').style.width = (f.power*100) + '%'; m.classList.toggle('on', f.isS); m.querySelector('span').textContent = f.isS ? 'Skarpt s, mätaren hör det' : 'Säg sss för att testa'; }
+    requestAnimationFrame(meter);
+  };
+  meter();
+  $('#pName').oninput = e => { save.name = e.target.value.trim().slice(0,20) || 'Olver'; persist(); updateHUD(); };
+  $('#pRate').oninput = e => { save.rate = +e.target.value; persist(); };
+  $('#pVoice').onchange = e => { save.voice = e.target.checked; persist(); };
+  $('#pOpen').onchange = e => { save.allOpen = e.target.checked; persist(); };
+  $('#pTest').onclick = () => { audio(); pickVoice(); speak(`Hello ${save.name}. Sun, snake, bus.`); };
+  let armed = false;
+  $('#pReset').onclick = e => {
+    if (!armed) { armed = true; e.target.textContent = 'Tryck igen för att nollställa'; return; }
+    const keep = {name:save.name, rate:save.rate, voice:save.voice, sound:save.sound, mic:save.mic, sens:save.sens};
+    save = Object.assign({}, DEFAULT, keep, {stars:{}, stickers:[], days:[]}); persist(); updateHUD();
+    e.target.textContent = 'Nollställt';
+  };
+  $('#pDone').onclick = () => {
+    closeModal();
+    if ($('#hud').hidden) showTitle();
+    else if (!screen.querySelector('.game')) showMap(false);
+    // A game that is running keeps its mode; the new mic setting applies from the next planet.
+  };
+}
+
+showTitle();
+})();
+</script>
+
+</body>
+</html>
